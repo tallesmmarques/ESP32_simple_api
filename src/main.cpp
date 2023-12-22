@@ -1,12 +1,14 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <ArduinoJson.h>
 
 const int ts = 100;
 
-float amplitude = 1;
-float ws = 1; // Hz
-float value = 0;
+float targetAngle;
+float pitch;
+float PWM;
+float Loop_time;
 
 const char* SSID = "UaiFai";
 const char* PWD  = "MinhaFamiliaETudo";
@@ -22,27 +24,37 @@ void mainPage()
   server.send(200, "text/html", "<h1>Teste</h1>");
 }
 
+DynamicJsonDocument doc(250);
+char buffer[250];
 void getLeitura()
 {
   Serial.println("GET /leitura");
-  server.send(200, "text/plain", String(value));
+
+  doc.clear();
+  doc["Loop_time"] = Loop_time;
+  doc["PWM"] = PWM;
+  doc["pitch"] = pitch;
+  doc["targetAngle"] = targetAngle;
+
+  serializeJson(doc, buffer);
+  server.send(200, "application/json", buffer);
 }
 
-void getEscrita()
-{
-  Serial.println("GET /escrita");
-  if (server.hasArg("ws"))
-  {
-    ws = server.arg("ws").toFloat();
-  }
-  if (server.hasArg("amplitude"))
-  {
-    amplitude = server.arg("amplitude").toFloat();
-  }
+// void getEscrita()
+// {
+//   Serial.println("GET /escrita");
+//   if (server.hasArg("ws"))
+//   {
+//     ws = server.arg("ws").toFloat();
+//   }
+//   if (server.hasArg("amplitude"))
+//   {
+//     amplitude = server.arg("amplitude").toFloat();
+//   }
 
-  String response = "ws:" + String(ws) + "," + "amplitude:" + String(amplitude);
-  server.send(200, "text/plain", response);
-}
+//   String response = "ws:" + String(ws) + "," + "amplitude:" + String(amplitude);
+//   server.send(200, "text/plain", response);
+// }
 
 void setup() 
 {
@@ -66,9 +78,11 @@ void setup()
 
   server.on("/", mainPage);
   server.on("/leitura", getLeitura);
-  server.on("/escrita", getEscrita);
+  // server.on("/escrita", getEscrita);
   server.enableCORS();
   server.begin();
+
+  randomSeed(analogRead(0));  
 
   xTaskCreatePinnedToCore(
     myLoop,           // função
@@ -89,7 +103,7 @@ void setup()
     1                 // qual núcleo a thread será executada
   );
 
-  Serial.println("Threads criadas com sucesso");
+  Serial.println("Threads created successfully");
 }
 
 void myLoop(void *parameter)
@@ -101,7 +115,10 @@ void myLoop(void *parameter)
   {
     if (millis() - last_time <= ts)
     {
-      value = amplitude * sin(2*PI*millis()/1000.0 * ws);
+      targetAngle = random(-90, 90);
+      pitch = random(-180, 180);
+      PWM = random(0, 100);
+      Loop_time = millis()/1000.0;
       last_time = millis();
     }
     delay(1);
